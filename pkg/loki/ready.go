@@ -19,6 +19,7 @@ import (
 	"time"
 )
 
+// After is a very simple ReadyFunc which sleeps for given duration and then marks systems as ready.
 func After(duration time.Duration) ReadyFunc {
 	return func(context.Context) (bool, error) {
 		time.Sleep(duration)
@@ -27,6 +28,8 @@ func After(duration time.Duration) ReadyFunc {
 	}
 }
 
+// AllReady is a ReadyFunc which takes in multiple ReadyCond instances and marks systems as ready only
+// when all ReadyCond are in ready state.
 func AllReady(readyConditions ...ReadyCond) ReadyFunc {
 	return func(ctx context.Context) (bool, error) {
 		for _, readyCond := range readyConditions {
