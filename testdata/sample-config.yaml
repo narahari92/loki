@@ -22,8 +22,8 @@ destroy:
     - resource1
   - system: testing
     resources:
-    - resource1
     - resource2
+    - resource3
   # Defines what should be killed as part of chaos testing. If resources are defined they're killed and tested. 'OR' and 'AND' works same as exclusions.
   scenarios:
   - system: testing
@@ -32,7 +32,7 @@ destroy:
   - system: testing
     resources:
     - resource2
-    - resource3
+    - resource4
   - system: testing
     # Does random kill of resources without violating exclusions for specified number of iterations
     random: 2
