@@ -32,13 +32,35 @@ type ChaosMaker struct {
 
 // CreateChaos executes all the chaos scenarios and exits with error on first scenario which fails to recover and
 // get into desired state or returns successfully if all systems get back into desired state from all chaos scenarios.
-func (cm *ChaosMaker) CreateChaos(ctx context.Context) error {
-	if err := cm.readyCheck(ctx); err != nil {
+func (cm *ChaosMaker) CreateChaos(ctx context.Context, opts ...HookOption) error {
+	hook := &Hook{}
+
+	for _, opt := range opts {
+		opt(hook)
+	}
+
+	if err := cm.readyCheck(ctx, hook); err != nil {
 		return err
 	}
 
-	if err := cm.loadSystems(ctx); err != nil {
+	if err := cm.loadSystems(ctx, hook); err != nil {
 		return err
+	}
+
+	if hook.preChaos != nil {
+		cm.Info("pre chaos hook executing")
+		if err := hook.preChaos(ctx); err != nil {
+			cm.WithError(err).Warn("pre chaos hook failed")
+		}
+	}
+
+	if hook.postChaos != nil {
+		defer func() {
+			cm.Info("post chaos hook executing")
+			if err := hook.postChaos(ctx); err != nil {
+				cm.WithError(err).Warn("post chaos hook failed")
+			}
+		}()
 	}
 
 	for systemName, provider := range cm.scenarioProviders {
@@ -104,7 +126,23 @@ func (cm *ChaosMaker) CreateChaos(ctx context.Context) error {
 	return nil
 }
 
-func (cm *ChaosMaker) loadSystems(ctx context.Context) error {
+func (cm *ChaosMaker) loadSystems(ctx context.Context, hook *Hook) error {
+	if hook.preSystemLoad != nil {
+		cm.Info("pre system load hook executing")
+		if err := hook.preSystemLoad(ctx); err != nil {
+			cm.WithError(err).Warn("pre system load hook failed")
+		}
+	}
+
+	if hook.postSystemLoad != nil {
+		defer func() {
+			cm.Info("post system load hook executing")
+			if err := hook.postSystemLoad(ctx); err != nil {
+				cm.WithError(err).Warn("post system load hook failed")
+			}
+		}()
+	}
+
 	cm.Info("system(s) are being loaded")
 
 	for name, system := range cm.systems {
@@ -120,7 +158,23 @@ func (cm *ChaosMaker) loadSystems(ctx context.Context) error {
 	return nil
 }
 
-func (cm *ChaosMaker) readyCheck(ctx context.Context) error {
+func (cm *ChaosMaker) readyCheck(ctx context.Context, hook *Hook) error {
+	if hook.preReady != nil {
+		cm.Info("pre ready hook executing")
+		if err := hook.preReady(ctx); err != nil {
+			cm.WithError(err).Warn("pre ready hook failed")
+		}
+	}
+
+	if hook.postReady != nil {
+		defer func() {
+			cm.Info("post ready hook executing")
+			if err := hook.postReady(ctx); err != nil {
+				cm.WithError(err).Warn("post ready hook failed")
+			}
+		}()
+	}
+
 	cm.Info("initiating readiness check")
 
 	ok, err := wait.ExecuteWithBackoff(
