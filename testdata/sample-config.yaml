@@ -1,0 +1,40 @@
+ready:
+    # Waits for this duration before starting chaos testing. Need to enhance for better wait(such as check for desired state) using repo policy
+    after: 5s
+# Defines different test systems. Here we're working on Kubernetes type. Can be extended to use AWS, Networks etc.
+systems:
+- type: test-system
+  name: testing
+  accessor: accessKey
+  # Mentions types of resources(optionally name and namespace) to be included under desired state of system. Each type of system can have different structure.
+# incluster: true
+  resources:
+  - resource1
+  - resource2
+  - resource3
+  - resource4
+# Defines rules for chaos testing(what can be killed and what not)
+destroy:
+  # Defines rules for what shouldn't be killed. Different element in exclusions array is treated as 'OR' and all resources under one element of exclusions array is treated as 'AND'
+  exclusions:
+  - system: testing
+    resources:
+    - resource1
+  - system: testing
+    resources:
+    - resource1
+    - resource2
+  # Defines what should be killed as part of chaos testing. If resources are defined they're killed and tested. 'OR' and 'AND' works same as exclusions.
+  scenarios:
+  - system: testing
+    resources:
+    - resource2
+  - system: testing
+    resources:
+    - resource2
+    - resource3
+  - system: testing
+    # Does random kill of resources without violating exclusions for specified number of iterations
+    random: 2
+    minResources: 1      # Minimum resources to be killed
+    maxResources: 2      # Maximum resources to be killed
