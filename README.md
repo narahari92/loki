@@ -10,3 +10,10 @@ go install github.com/narahari92/loki/cmd/loki
 
 # Architecture
 Please refer to [architecture.md](https://github.com/narahari92/loki/blob/master/docs/architecture.md) for details on architecture of loki.
+
+# Testing plugins
+To test whether a plugin implements loki correctly, simulate your system with resources, create `lokitest.Plugin` with the custom plugin's `System`, `Destroyer` and `killer`; and create `lokitest.Configuration` with some identifiers and sample destroy section. Then run below code to validate that the test passes.
+
+```
+lokitest.ValidateAll(context.Context, *testing.T, *lokitest.Plugin, *lokitest.Configuration)
+```
