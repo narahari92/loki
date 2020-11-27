@@ -56,9 +56,9 @@ func TestChaos(t *testing.T) {
 					break
 				}
 
-				system.state[TestIdentifier("resource2")] = true
-				system.state[TestIdentifier("resource3")] = true
-				system.state[TestIdentifier("resource4")] = true
+				for id, exists := range system.resources {
+					system.state[id] = exists
+				}
 			}
 		}
 	}(ctx, configuration.systems["testing"].(*TestSystem))

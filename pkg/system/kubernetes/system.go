@@ -16,6 +16,7 @@ package kubernetes
 
 import (
 	"context"
+	"encoding/json"
 	"io/ioutil"
 
 	"github.com/pkg/errors"
@@ -198,6 +199,17 @@ func (s *System) Identifiers() loki.Identifiers {
 	}
 
 	return identifiers
+}
+
+// AsJSON returns the json representation of the desired state of the kubernetes system.
+func (s *System) AsJSON() ([]byte, error) {
+	objects := make([]unstructured.Unstructured, 0)
+
+	for _, obj := range s.state {
+		objects = append(objects, *obj)
+	}
+
+	return json.Marshal(objects)
 }
 
 func (s *System) createClient() error {

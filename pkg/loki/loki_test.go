@@ -16,6 +16,7 @@ package loki
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -83,6 +84,10 @@ func (t *TestSystem) Identifiers() Identifiers {
 	}
 
 	return identifiers
+}
+
+func (t *TestSystem) AsJSON() ([]byte, error) {
+	return json.Marshal(t.state)
 }
 
 func DestroyerTest() DestroyerFunc {

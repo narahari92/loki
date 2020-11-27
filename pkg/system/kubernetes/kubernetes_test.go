@@ -94,7 +94,7 @@ func createClientAndIdentifiers(t *testing.T) (client.Client, []*ResourceIdentif
 		Name:             "test-ns",
 	})
 
-	objects = append(objects, &appsv1.Deployment{
+	deploy1 := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "deploy1",
 			Namespace: "test-ns",
@@ -136,14 +136,16 @@ func createClientAndIdentifiers(t *testing.T) (client.Client, []*ResourceIdentif
 				},
 			},
 		},
-	})
+	}
+
+	objects = append(objects, deploy1)
 	identifiers = append(identifiers, &ResourceIdentifier{
 		GroupVersionKind: schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"},
 		Name:             "deploy1",
 		Namespace:        "test-ns",
 	})
 
-	objects = append(objects, &appsv1.Deployment{
+	deploy2 := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "deploy2",
 			Namespace: "test-ns",
@@ -185,7 +187,9 @@ func createClientAndIdentifiers(t *testing.T) (client.Client, []*ResourceIdentif
 				},
 			},
 		},
-	})
+	}
+
+	objects = append(objects, deploy2)
 	identifiers = append(identifiers, &ResourceIdentifier{
 		GroupVersionKind: schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"},
 		Name:             "deploy2",
@@ -241,6 +245,12 @@ func createClientAndIdentifiers(t *testing.T) (client.Client, []*ResourceIdentif
 		err := k8sClient.Create(context.Background(), object)
 		require.NoError(t, err)
 	}
+
+	err = k8sClient.Status().Update(context.Background(), deploy1)
+	require.NoError(t, err)
+
+	err = k8sClient.Status().Update(context.Background(), deploy2)
+	require.NoError(t, err)
 
 	return k8sClient, identifiers
 }

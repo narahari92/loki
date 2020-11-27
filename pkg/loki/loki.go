@@ -47,6 +47,8 @@ type System interface {
 	Validate(context.Context) (bool, error)
 	// Identifiers return Identifier values of all resources in the system.
 	Identifiers() Identifiers
+	// AsJSON returns the json representation of the desired state of the system.
+	AsJSON() ([]byte, error)
 }
 
 // Destroyer parses the single section of destroy whether it be exclusions or scenarios. Plugin implementations

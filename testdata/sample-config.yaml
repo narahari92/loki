@@ -13,6 +13,8 @@ systems:
   - resource2
   - resource3
   - resource4
+  - resource5
+  - resource6
 # Defines rules for chaos testing(what can be killed and what not)
 destroy:
   # Defines rules for what shouldn't be killed. Different element in exclusions array is treated as 'OR' and all resources under one element of exclusions array is treated as 'AND'
@@ -36,5 +38,6 @@ destroy:
   - system: testing
     # Does random kill of resources without violating exclusions for specified number of iterations
     random: 2
+    timeout: 10s
     minResources: 1      # Minimum resources to be killed
     maxResources: 2      # Maximum resources to be killed
