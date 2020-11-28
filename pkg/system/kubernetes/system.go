@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -29,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/narahari92/loki/pkg/loki"
+	"github.com/narahari92/loki/pkg/wait"
 )
 
 const (
@@ -167,6 +169,11 @@ func (s *System) Load(ctx context.Context) error {
 // Validate validates whether the system is in desired state or not by comparing kubernetes resources at current time with
 // that loaded by Load function.
 func (s *System) Validate(ctx context.Context) (bool, error) {
+	backoff := wait.MinMaxBackoff{
+		Min: 250 * time.Millisecond,
+		Max: 500 * time.Millisecond,
+	}
+
 	for identifier, resource := range s.state {
 		object := &unstructured.Unstructured{}
 		object.SetGroupVersionKind(identifier.GroupVersionKind)
@@ -185,6 +192,8 @@ func (s *System) Validate(ctx context.Context) (bool, error) {
 			s.logger.Debugf("resource %#v\ndidn't match with\n%#v", resource, object)
 			return ok, nil
 		}
+
+		time.Sleep(backoff.Step())
 	}
 
 	return true, nil
