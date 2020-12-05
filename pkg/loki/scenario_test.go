@@ -39,7 +39,9 @@ func TestScenario(t *testing.T) {
 		system := configuration.systems[systemName]
 
 		for {
-			scenario, ok := provider.scenario(system)
+			scenario, ok, err := provider.scenario(system)
+			require.NoError(t, err)
+
 			if !ok {
 				break
 			}

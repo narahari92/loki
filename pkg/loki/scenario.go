@@ -22,6 +22,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 const maxTotalClashes = 10
@@ -42,7 +44,9 @@ type scenarioProvider struct {
 	computedScenarios   []*scenario
 }
 
-func (sp *scenarioProvider) scenario(system System) (*scenario, bool) {
+func (sp *scenarioProvider) scenario(system System) (*scenario, bool, error) {
+	var err error
+
 	sp.computed.Do(func() {
 		sp.computedScenarios = append(sp.computedScenarios, sp.predefinedScenarios...)
 
@@ -61,7 +65,8 @@ func (sp *scenarioProvider) scenario(system System) (*scenario, bool) {
 
 		for i := int64(0); i < sp.random; i++ {
 			if totalClashes == maxTotalClashes {
-				panic("too many clashes with exclusions")
+				err = errors.New("too many clashes with exclusions")
+				return
 			}
 			noOfIdentifiers := rand.Int63n(sp.maxResources-sp.minResources) + sp.minResources
 
@@ -87,14 +92,18 @@ func (sp *scenarioProvider) scenario(system System) (*scenario, bool) {
 		}
 	})
 
+	if err != nil {
+		return nil, false, err
+	}
+
 	if len(sp.computedScenarios) > 0 {
 		scenario := sp.computedScenarios[0]
 		sp.computedScenarios = sp.computedScenarios[1:len(sp.computedScenarios)]
 
-		return scenario, true
+		return scenario, true, nil
 	}
 
-	return nil, false
+	return nil, false, nil
 }
 
 func generateExclusionHashes(exclusions []Identifiers) []string {

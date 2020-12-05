@@ -23,6 +23,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
+	"github.com/narahari92/loki/pkg/audit"
 	"github.com/narahari92/loki/pkg/loki"
 	"github.com/narahari92/loki/pkg/system/kubernetes"
 )
@@ -40,6 +41,7 @@ func run(ctx context.Context, logger logrus.FieldLogger) error {
 	kubernetes.Register()
 
 	configFile := flag.String("config", "", "configuration yaml for execution")
+	reportLocation := flag.String("report", "", "location where the report file will be created")
 
 	flag.Parse()
 
@@ -57,7 +59,27 @@ func run(ctx context.Context, logger logrus.FieldLogger) error {
 	chaosMaker := loki.ChaosMaker{
 		Config:      config,
 		FieldLogger: logger,
+		Reporter:    &audit.Reporter{},
 	}
+
+	defer func() {
+		if reportLocation == nil || *reportLocation == "" {
+			return
+		}
+
+		file, err := os.Create(*reportLocation)
+		if err != nil {
+			logger.WithError(err).Errorf("failed to create report file %s", *reportLocation)
+		}
+
+		if err = chaosMaker.Reporter.Report(file); err != nil {
+			logger.WithError(err).Errorf("failed to write report into file %s", *reportLocation)
+		}
+
+		if err = file.Close(); err != nil {
+			logger.WithError(err).Errorf("failed to close report file %s", *reportLocation)
+		}
+	}()
 
 	if err := chaosMaker.CreateChaos(ctx); err != nil {
 		return errors.Wrap(err, "failure in chaos")

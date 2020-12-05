@@ -204,6 +204,7 @@ func (s *System) Identifiers() loki.Identifiers {
 	var identifiers loki.Identifiers
 
 	for identifier := range s.state {
+		identifier := identifier
 		identifiers = append(identifiers, &identifier)
 	}
 

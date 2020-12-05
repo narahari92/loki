@@ -21,6 +21,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
+	"github.com/narahari92/loki/pkg/audit"
 	"github.com/narahari92/loki/pkg/wait"
 )
 
@@ -28,6 +29,7 @@ import (
 type ChaosMaker struct {
 	*Config
 	logrus.FieldLogger
+	*audit.Reporter
 }
 
 // CreateChaos executes all the chaos scenarios and exits with error on first scenario which fails to recover and
@@ -37,6 +39,10 @@ func (cm *ChaosMaker) CreateChaos(ctx context.Context, opts ...HookOption) error
 
 	for _, opt := range opts {
 		opt(hook)
+	}
+
+	if cm.Reporter == nil {
+		cm.Reporter = &audit.Reporter{}
 	}
 
 	if err := cm.readyCheck(ctx, hook); err != nil {
@@ -49,16 +55,36 @@ func (cm *ChaosMaker) CreateChaos(ctx context.Context, opts ...HookOption) error
 
 	if hook.preChaos != nil {
 		cm.Info("pre chaos hook executing")
+		result := audit.SuccessResult
+		message := "Successfully completed pre chaos test hook"
+
 		if err := hook.preChaos(ctx); err != nil {
+			result = audit.FailureResult
+			message = errors.Wrap(err, "pre chaos test hook failed").Error()
 			cm.WithError(err).Warn("pre chaos hook failed")
+		}
+
+		cm.Reporter.Scenarios.PreChaosTests = audit.Message{
+			Result:  result,
+			Message: message,
 		}
 	}
 
 	if hook.postChaos != nil {
 		defer func() {
 			cm.Info("post chaos hook executing")
+			result := audit.SuccessResult
+			message := "Successfully completed post chaos test hook"
+
 			if err := hook.postChaos(ctx); err != nil {
+				result = audit.FailureResult
+				message = errors.Wrap(err, "post chaos test hook failed").Error()
 				cm.WithError(err).Warn("post chaos hook failed")
+			}
+
+			cm.Reporter.Scenarios.PostChaosTests = audit.Message{
+				Result:  result,
+				Message: message,
 			}
 		}()
 	}
@@ -84,7 +110,18 @@ func (cm *ChaosMaker) CreateChaos(ctx context.Context, opts ...HookOption) error
 		}
 
 		for {
-			scenario, ok := provider.scenario(system)
+			scenario, ok, err := provider.scenario(system)
+			if err != nil {
+				cm.Reporter.Miscellaneous = append(
+					cm.Reporter.Miscellaneous,
+					audit.Message{
+						Result:  audit.FailureResult,
+						Message: errors.Wrap(err, "failed to generated scenario").Error(),
+					},
+				)
+				return err
+			}
+
 			if !ok {
 				break
 			}
@@ -92,11 +129,22 @@ func (cm *ChaosMaker) CreateChaos(ctx context.Context, opts ...HookOption) error
 			cm.Infof("creating chaos by action:\n%s", scenario.identifiers)
 			if err := killer.Kill(ctx, scenario.identifiers...); err != nil {
 				errorMsg := "failed to kill identifiers for system %s of type %s"
+				cm.Reporter.Scenarios.Scenarios = append(
+					cm.Reporter.Scenarios.Scenarios,
+					audit.Scenario{
+						Identifiers: scenario.identifiers.String(),
+						Message: audit.Message{
+							Result:  audit.FailureResult,
+							Message: errors.Wrapf(err, errorMsg, systemName, systemType).Error(),
+						},
+					},
+				)
+
 				cm.WithError(err).Errorf(errorMsg, systemName, systemType)
 				return errors.Wrapf(err, errorMsg, systemName, systemType)
 			}
 
-			ok, err := wait.ExecuteWithBackoff(
+			ok, err = wait.ExecuteWithBackoff(
 				ctx,
 				&wait.ExponentialBackoff{
 					Cap:    10 * time.Minute,
@@ -109,19 +157,60 @@ func (cm *ChaosMaker) CreateChaos(ctx context.Context, opts ...HookOption) error
 
 			if err != nil {
 				errorMsg := "failed to validate system '%s'"
+				cm.Reporter.Scenarios.Scenarios = append(
+					cm.Reporter.Scenarios.Scenarios,
+					audit.Scenario{
+						Identifiers: scenario.identifiers.String(),
+						Message: audit.Message{
+							Result:  audit.FailureResult,
+							Message: errors.Wrapf(err, errorMsg, systemName).Error(),
+						},
+					},
+				)
+
 				cm.WithError(err).Errorf(errorMsg, systemName)
 				return errors.Wrapf(err, errorMsg, systemName)
 			}
 
 			if !ok {
 				errorMsg := "validation failed. system '%s' didn't reach desired state"
+				cm.Reporter.Scenarios.Scenarios = append(
+					cm.Reporter.Scenarios.Scenarios,
+					audit.Scenario{
+						Identifiers: scenario.identifiers.String(),
+						Message: audit.Message{
+							Result:  audit.FailureResult,
+							Message: errors.Errorf(errorMsg, systemName).Error(),
+						},
+					},
+				)
+
 				cm.Errorf(errorMsg, systemName)
 				return errors.Errorf(errorMsg, systemName)
 			}
 
+			cm.Reporter.Scenarios.Scenarios = append(
+				cm.Reporter.Scenarios.Scenarios,
+				audit.Scenario{
+					Identifiers: scenario.identifiers.String(),
+					Message: audit.Message{
+						Result:  audit.SuccessResult,
+						Message: "Successfully executed the scenario",
+					},
+				},
+			)
+
 			cm.Infof("recovered successfully by chaos by action:\n%s", scenario.identifiers)
 		}
 	}
+
+	cm.Reporter.Miscellaneous = append(
+		cm.Reporter.Miscellaneous,
+		audit.Message{
+			Result:  audit.SuccessResult,
+			Message: "Successfully executed all scenarios",
+		},
+	)
 
 	return nil
 }
@@ -129,16 +218,36 @@ func (cm *ChaosMaker) CreateChaos(ctx context.Context, opts ...HookOption) error
 func (cm *ChaosMaker) loadSystems(ctx context.Context, hook *Hook) error {
 	if hook.preSystemLoad != nil {
 		cm.Info("pre system load hook executing")
+		result := audit.SuccessResult
+		message := "Successfully completed pre system load hook"
+
 		if err := hook.preSystemLoad(ctx); err != nil {
+			result = audit.FailureResult
+			message = errors.Wrap(err, "pre system load hook failed").Error()
 			cm.WithError(err).Warn("pre system load hook failed")
+		}
+
+		cm.Reporter.Load.PreLoad = audit.Message{
+			Result:  result,
+			Message: message,
 		}
 	}
 
 	if hook.postSystemLoad != nil {
 		defer func() {
 			cm.Info("post system load hook executing")
+			result := audit.SuccessResult
+			message := "Successfully completed post system load hook"
+
 			if err := hook.postSystemLoad(ctx); err != nil {
+				result = audit.FailureResult
+				message = errors.Wrap(err, "post system load hook failed").Error()
 				cm.WithError(err).Warn("post system load hook failed")
+			}
+
+			cm.Reporter.Load.PreLoad = audit.Message{
+				Result:  result,
+				Message: message,
 			}
 		}()
 	}
@@ -148,9 +257,19 @@ func (cm *ChaosMaker) loadSystems(ctx context.Context, hook *Hook) error {
 	for name, system := range cm.systems {
 		if err := system.Load(ctx); err != nil {
 			errorMsg := "system '%s' failed to load"
+			cm.Load.Message = audit.Message{
+				Result:  audit.FailureResult,
+				Message: errors.Wrap(err, errorMsg).Error(),
+			}
+
 			cm.WithError(err).Errorf(errorMsg, name)
 			return errors.Wrapf(err, errorMsg, name)
 		}
+	}
+
+	cm.Reporter.Load.Message = audit.Message{
+		Result:  audit.SuccessResult,
+		Message: "system(s) are loaded successfully",
 	}
 
 	cm.Info("system(s) are loaded")
@@ -161,16 +280,36 @@ func (cm *ChaosMaker) loadSystems(ctx context.Context, hook *Hook) error {
 func (cm *ChaosMaker) readyCheck(ctx context.Context, hook *Hook) error {
 	if hook.preReady != nil {
 		cm.Info("pre ready hook executing")
+		result := audit.SuccessResult
+		message := "Successfully completed pre ready hook"
+
 		if err := hook.preReady(ctx); err != nil {
+			result = audit.FailureResult
+			message = errors.Wrap(err, "pre ready hook failed").Error()
 			cm.WithError(err).Warn("pre ready hook failed")
+		}
+
+		cm.Reporter.Ready.PreReady = audit.Message{
+			Result:  result,
+			Message: message,
 		}
 	}
 
 	if hook.postReady != nil {
 		defer func() {
 			cm.Info("post ready hook executing")
+			result := audit.SuccessResult
+			message := "Successfully completed post ready hook"
+
 			if err := hook.postReady(ctx); err != nil {
+				result = audit.FailureResult
+				message = errors.Wrap(err, "post ready hook failed").Error()
 				cm.WithError(err).Warn("post ready hook failed")
+			}
+
+			cm.Reporter.Ready.PostReady = audit.Message{
+				Result:  result,
+				Message: message,
 			}
 		}()
 	}
@@ -190,14 +329,29 @@ func (cm *ChaosMaker) readyCheck(ctx context.Context, hook *Hook) error {
 	)
 	if err != nil {
 		errorMsg := "system(s) failed to reach ready state"
+		cm.Reporter.Ready.Message = audit.Message{
+			Result:  audit.FailureResult,
+			Message: errors.Wrap(err, errorMsg).Error(),
+		}
+
 		cm.WithError(err).Error(errorMsg)
 		return errors.Wrap(err, errorMsg)
 	}
 
 	if !ok {
 		errorMsg := "system(s) didn't reach ready state"
+		cm.Reporter.Ready.Message = audit.Message{
+			Result:  audit.FailureResult,
+			Message: errorMsg,
+		}
+
 		cm.Errorf(errorMsg)
 		return errors.New(errorMsg)
+	}
+
+	cm.Reporter.Ready.Message = audit.Message{
+		Result:  audit.SuccessResult,
+		Message: "Successfully completed ready phase",
 	}
 
 	cm.Info("system(s) are ready for chaos testing")
