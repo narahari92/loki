@@ -18,6 +18,8 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/narahari92/loki/pkg/loki"
@@ -43,6 +45,10 @@ func (k *Killer) Kill(ctx context.Context, identifiers ...loki.Identifier) error
 		object.SetName(resourceIdentifier.Name)
 
 		if err := k.k8sClient.Delete(ctx, object); err != nil {
+			if k8serrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+				continue
+			}
+
 			return errors.Wrapf(err, "failed to delete kubernetes resource")
 		}
 	}
