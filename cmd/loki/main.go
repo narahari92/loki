@@ -25,6 +25,7 @@ import (
 
 	"github.com/narahari92/loki/pkg/audit"
 	"github.com/narahari92/loki/pkg/loki"
+	"github.com/narahari92/loki/pkg/rego"
 	"github.com/narahari92/loki/pkg/system/kubernetes"
 )
 
@@ -38,7 +39,7 @@ func main() {
 }
 
 func run(ctx context.Context, logger logrus.FieldLogger) error {
-	kubernetes.Register()
+	registerDependencies()
 
 	configFile := flag.String("config", "", "configuration yaml for execution")
 	reportLocation := flag.String("report", "", "location where the report file will be created")
@@ -86,4 +87,14 @@ func run(ctx context.Context, logger logrus.FieldLogger) error {
 	}
 
 	return nil
+}
+
+func registerDependencies() {
+	const afterKey = "after"
+
+	kubernetes.Register()
+
+	loki.RegisterReadyParser(afterKey, loki.AfterParser)
+	rego.RegisterReadyParser()
+
 }

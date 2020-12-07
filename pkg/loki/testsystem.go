@@ -30,8 +30,8 @@ func (t TestIdentifier) ID() ID {
 }
 
 type TestSystem struct {
-	resources map[TestIdentifier]bool
-	state     map[TestIdentifier]bool
+	Resources map[TestIdentifier]bool
+	State     map[TestIdentifier]bool
 }
 
 func (t *TestSystem) Parse(m map[string]interface{}) (err error) {
@@ -44,28 +44,28 @@ func (t *TestSystem) Parse(m map[string]interface{}) (err error) {
 	resources := m["resources"].([]interface{})
 
 	for _, resource := range resources {
-		t.resources[TestIdentifier(resource.(string))] = true
+		t.Resources[TestIdentifier(resource.(string))] = true
 	}
 
 	return nil
 }
 
 func (t *TestSystem) Load(ctx context.Context) error {
-	for id, val := range t.resources {
-		t.state[id] = val
+	for id, val := range t.Resources {
+		t.State[id] = val
 	}
 
 	return nil
 }
 
 func (t *TestSystem) Validate(ctx context.Context) (bool, error) {
-	if len(t.resources) != len(t.state) {
+	if len(t.Resources) != len(t.State) {
 		return false, nil
 	}
 
 outerLoop:
-	for resId, resVal := range t.resources {
-		for stateId, stateVal := range t.state {
+	for resId, resVal := range t.Resources {
+		for stateId, stateVal := range t.State {
 			if resId == stateId && resVal == stateVal {
 				continue outerLoop
 			}
@@ -79,15 +79,27 @@ outerLoop:
 func (t *TestSystem) Identifiers() Identifiers {
 	var identifiers Identifiers
 
-	for resource := range t.resources {
+	for resource := range t.Resources {
 		identifiers = append(identifiers, resource)
 	}
 
 	return identifiers
 }
 
-func (t *TestSystem) AsJSON() ([]byte, error) {
-	return json.Marshal(t.state)
+func (t *TestSystem) AsJSON(ctx context.Context, reload bool) ([]byte, error) {
+	if reload {
+		if err := t.Load(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	var identifiers Identifiers
+
+	for resource := range t.State {
+		identifiers = append(identifiers, resource)
+	}
+
+	return json.Marshal(identifiers)
 }
 
 func DestroyerTest() DestroyerFunc {
@@ -120,8 +132,8 @@ func (t *TestKiller) Kill(_ context.Context, identifiers ...Identifier) (err err
 	}()
 
 	for _, identifier := range identifiers {
-		if _, ok := t.System.state[identifier.(TestIdentifier)]; ok {
-			delete(t.System.state, identifier.(TestIdentifier))
+		if _, ok := t.System.State[identifier.(TestIdentifier)]; ok {
+			delete(t.System.State, identifier.(TestIdentifier))
 		}
 	}
 
@@ -131,8 +143,8 @@ func (t *TestKiller) Kill(_ context.Context, identifiers ...Identifier) (err err
 func RegisterTestSystem(t *testing.T) {
 	RegisterSystem("test-system", func() System {
 		return &TestSystem{
-			resources: make(map[TestIdentifier]bool),
-			state:     make(map[TestIdentifier]bool),
+			Resources: make(map[TestIdentifier]bool),
+			State:     make(map[TestIdentifier]bool),
 		}
 	})
 	RegisterDestroyer("test-system", DestroyerTest())

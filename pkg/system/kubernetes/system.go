@@ -211,8 +211,15 @@ func (s *System) Identifiers() loki.Identifiers {
 	return identifiers
 }
 
-// AsJSON returns the json representation of the desired state of the kubernetes system.
-func (s *System) AsJSON() ([]byte, error) {
+// AsJSON returns the json representation of the state of the kubernetes system. If `reload` is set to `true`, state of the system
+// will be reloaded before preparing json representation of system.
+func (s *System) AsJSON(ctx context.Context, reload bool) ([]byte, error) {
+	if reload {
+		if err := s.Load(ctx); err != nil {
+			return nil, errors.Wrap(err, "failed to get json representation of system")
+		}
+	}
+
 	objects := make([]unstructured.Unstructured, 0)
 
 	for _, obj := range s.state {

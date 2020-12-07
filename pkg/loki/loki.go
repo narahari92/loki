@@ -29,6 +29,9 @@ var (
 
 	availableKillers = make(map[string]func(System) (Killer, error))
 	killersMx        sync.Mutex
+
+	readyParsers = make(map[string]func(*Config) ReadyParser)
+	readyMx      sync.Mutex
 )
 
 // ID uniquely represents any resource or operation in a system.
@@ -47,8 +50,9 @@ type System interface {
 	Validate(context.Context) (bool, error)
 	// Identifiers return Identifier values of all resources in the system.
 	Identifiers() Identifiers
-	// AsJSON returns the json representation of the desired state of the system.
-	AsJSON() ([]byte, error)
+	// AsJSON returns the json representation of the state of the system. If `reload` is set to `true`, state of the system
+	// will be reloaded before preparing json representation of system.
+	AsJSON(ctx context.Context, reload bool) ([]byte, error)
 }
 
 // Destroyer parses the single section of destroy whether it be exclusions or scenarios. Plugin implementations
@@ -96,6 +100,21 @@ type ReadyFunc func(context.Context) (bool, error)
 // Ready calls r(ctx).
 func (r ReadyFunc) Ready(ctx context.Context) (bool, error) {
 	return r(ctx)
+}
+
+// ReadyParser parses the ready section to create ReadyCond.
+type ReadyParser interface {
+	// Parse parses the ready section and creates ReadyCond.
+	Parse(map[string]interface{}) (ReadyCond, error)
+}
+
+// ReadyParserFunc is the syntax sugar for  single method ReadyParser interface so that a simple function can implement
+// ReadyParser interface.
+type ReadyParserFunc func(map[string]interface{}) (ReadyCond, error)
+
+// Parse calls r(readyConf).
+func (r ReadyParserFunc) Parse(readyConf map[string]interface{}) (ReadyCond, error) {
+	return r(readyConf)
 }
 
 // Identifier uniquely  identifies any resource or operation in a particular system.
@@ -146,4 +165,12 @@ func RegisterKiller(name string, killer func(System) (Killer, error)) {
 	defer killersMx.Unlock()
 
 	availableKillers[name] = killer
+}
+
+// RegisterReadyParser registers ReadyParser creating functions that can be used by config file.
+func RegisterReadyParser(key string, parser func(*Config) ReadyParser) {
+	readyMx.Lock()
+	defer readyMx.Unlock()
+
+	readyParsers[key] = parser
 }

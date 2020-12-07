@@ -46,18 +46,18 @@ func TestChaos(t *testing.T) {
 				return
 
 			case <-time.After(1 * time.Second):
-				if _, ok := system.state[TestIdentifier("resource1")]; !ok {
+				if _, ok := system.State[TestIdentifier("resource1")]; !ok {
 					break
 				}
 
-				_, res2Ok := system.state[TestIdentifier("resource2")]
-				_, res3Ok := system.state[TestIdentifier("resource3")]
+				_, res2Ok := system.State[TestIdentifier("resource2")]
+				_, res3Ok := system.State[TestIdentifier("resource3")]
 				if !res2Ok && !res3Ok {
 					break
 				}
 
-				for id, exists := range system.resources {
-					system.state[id] = exists
+				for id, exists := range system.Resources {
+					system.State[id] = exists
 				}
 			}
 		}

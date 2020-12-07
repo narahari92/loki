@@ -19,6 +19,11 @@ import (
 	"time"
 )
 
+const (
+	afterKey    = "after"
+	allReadyKey = "allReady"
+)
+
 // After is a very simple ReadyFunc which sleeps for given duration and then marks systems as ready.
 func After(duration time.Duration) ReadyFunc {
 	return func(context.Context) (bool, error) {
@@ -26,6 +31,24 @@ func After(duration time.Duration) ReadyFunc {
 
 		return true, nil
 	}
+}
+
+// AfterParser returns ReadyParser with can parse After ReadyFunc
+func AfterParser(config *Config) ReadyParser {
+	var readyParser ReadyParserFunc
+
+	readyParser = func(readyConf map[string]interface{}) (ReadyCond, error) {
+		after := readyConf[afterKey]
+
+		duration, err := parseDuration(afterKey, after)
+		if err != nil {
+			return nil, err
+		}
+
+		return After(duration), nil
+	}
+
+	return readyParser
 }
 
 // AllReady is a ReadyFunc which takes in multiple ReadyCond instances and marks systems as ready only

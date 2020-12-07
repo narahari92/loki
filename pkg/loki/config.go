@@ -27,7 +27,6 @@ const (
 	nameKey             = "name"
 	typeKey             = "type"
 	readyKey            = "ready"
-	afterKey            = "after"
 	destroyKey          = "destroy"
 	scenariosKey        = "scenarios"
 	exclusionsKey       = "exclusions"
@@ -56,6 +55,10 @@ func NewConfig() *Config {
 		systems:           make(map[string]System),
 		scenarioProviders: make(map[string]*scenarioProvider),
 	}
+}
+
+func (c *Config) System(name string) System {
+	return c.systems[name]
 }
 
 // Parse parses the input configuration and populates the Config struct.
@@ -152,26 +155,36 @@ func (c *Config) parseReady(ready interface{}) error {
 		return errors.Errorf("'%s' section should be of type map", readyKey)
 	}
 
-	after, ok := readyConf[afterKey]
-	if ok {
-		if err := c.parseAfter(after); err != nil {
-			return errors.Wrapf(err, "failed to parse '%s'", afterKey)
-		}
-	}
-
 	var err error
 
 	timeout := defaultTimeout
 	if timeoutValue, ok := readyConf[timeoutKey]; ok {
 		timeout, err = parseDuration(timeoutKey, timeoutValue)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "failed to parse ready timeout")
 		}
 	}
 
 	c.readyTimeout = timeout
 
-	return nil
+	for key, parser := range readyParsers {
+		if _, ok := readyConf[key]; !ok {
+			continue
+		}
+
+		readyParser := parser(c)
+
+		readyCond, err := readyParser.Parse(readyConf)
+		if err != nil {
+			return errors.Wrapf(err, "failed to parse ready section using '%s' ready parser", key)
+		}
+
+		c.ready = readyCond
+
+		return nil
+	}
+
+	return errors.New("unidentified ready section")
 }
 
 func (c *Config) parseDestroy(destroy interface{}) error {
@@ -194,17 +207,6 @@ func (c *Config) parseDestroy(destroy interface{}) error {
 	if err := c.parseScenarios(scenarios); err != nil {
 		return errors.Wrap(err, "failed to parse scenarios")
 	}
-
-	return nil
-}
-
-func (c *Config) parseAfter(after interface{}) error {
-	duration, err := parseDuration(afterKey, after)
-	if err != nil {
-		return err
-	}
-
-	c.ready = After(duration)
 
 	return nil
 }
